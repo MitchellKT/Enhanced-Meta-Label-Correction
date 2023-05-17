@@ -61,7 +61,7 @@ python main_clothing.py --gpuid=a --n_gpus=b
 To start training on the CIFAR datasets run:
 
 ``` 
-python main_clothing.py --gpuid=a --n_gpus=b --dataset=c --corruption_type=d --corruption_level=e -ssl_path=f
+python main_cifar.py --gpuid=a --n_gpus=b --dataset=c --corruption_type=d --corruption_level=e --ssl_path=f
 ```
 
 The parameters and their meaning:
