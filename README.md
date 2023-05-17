@@ -1,6 +1,6 @@
 # Enhanced Meta Label Correction (EMLC)
 
-![](https://github.com/iccv23anonymous/Enhanced-Meta-Label-Correction/blob/main/Fig:Teacher.jpg?raw=true)
+![](https://github.com/MitchellKT/Enhanced-Meta-Label-Correction/blob/main/Fig:Teacher.jpg?raw=true)
 
 ## Description :information_source:
 This is an official PyTorch implementation of the "Enhanced Meta Label Correction for Coping with Label Corruption" paper.
