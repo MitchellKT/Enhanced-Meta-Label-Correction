@@ -1,6 +1,6 @@
 # Enhanced Meta Label Correction (EMLC)
 
-![](https://github.com/iccv23anonymous/Enhanced-Meta-Label-Correction/blob/main/Teacher.jpg?raw=true)
+![](https://github.com/iccv23anonymous/Enhanced-Meta-Label-Correction/blob/main/Fig:Teacher.jpg?raw=true)
 
 ## Description :information_source:
 This is an official PyTorch implementation of the "Enhanced Meta Label Correction for Coping with Label Corruption" paper.
@@ -20,7 +20,7 @@ CIFAR-10 with 1k clean samples:
 |:--- |:---:|:---:|:---:|:---:|:---:|
 |MLC|92.6 |88.1 |77.4 |67.9 |–|
 |Previous SOTA|93.4 |90.07 | 86.78 | 79.52 | 91.6 |
-|EMLC|**93.64** |**92.23**|**90.97**|**90.13**|**92.71**|
+|EMLC|**93.53** |**92.63**|**90.95**|**90.71**|**91.82**|
 
 CIFAR-100 with 1k clean samples:
 
@@ -28,7 +28,7 @@ CIFAR-100 with 1k clean samples:
 |:--- |:---:|:---:|:---:|:---:|
 |MLC|66.5 | 52.4 | 18.9 | 14.2 |
 |Previous SOTA| 72.5 | 65.4 | 55.22 | 16.7 | 
-|EMLC|**73.27** |**68.98**|**59.34**|**53.78**|
+|EMLC|**73.05** |**68.61**|**60.51**|**54.04**|
 
 Clothing1M:
 
