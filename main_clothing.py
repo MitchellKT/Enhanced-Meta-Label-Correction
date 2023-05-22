@@ -22,7 +22,7 @@ parser.add_argument('--data_path', default='data/', type=str, help='Root for the
 parser.add_argument('--logdir', type=str, default='runs', help='Log folder.')
 
 # Training
-parser.add_argument('--epochs', '-e', type=int, default=3, help='Number of epochs to train.')
+parser.add_argument('--epochs', '-e', type=int, default=15, help='Number of epochs to train.')
 parser.add_argument('--every', default=10, type=int, help='Eval interval')
 parser.add_argument('--bs', default=1024, type=int, help='batch size')
 parser.add_argument('--test_bs', default=100, type=int, help='batch size')
@@ -80,7 +80,7 @@ def build_models(rank, num_classes):
 
 # //////////////////////// run experiments ////////////////////////
 def run(rank):
-    ddp_setup(rank, world_size=args.n_gpus, min_rank=args.gpuid)
+    ddp_setup(rank, args.n_gpus)
     logger = set_logging(rank)
     filename = '_'.join(['clothing1m', args.runid, str(args.epochs), str(args.seed), str(args.data_seed)])
     exp_id = filename
@@ -90,7 +90,9 @@ def run(rank):
     gold_loader, silver_loader, valid_loader, test_loader, num_classes = prepare_data(args)
     main_net, meta_net, enhacner = build_models(rank, num_classes)
 
-    trainer = Trainer(rank, args, main_net, meta_net, enhacner, gold_loader, silver_loader, valid_loader, test_loader, num_classes, logger, exp_id)
+    trainer = Trainer(rank, args, main_net, meta_net, enhacner,
+                      gold_loader, silver_loader, valid_loader, test_loader,
+                      num_classes, logger, 'adversarial', True, exp_id)
     trainer.train()
     test_acc = trainer.final_eval()
     

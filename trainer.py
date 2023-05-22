@@ -1,7 +1,5 @@
 import copy
-import torch
 from utils import tocuda, evaluate
-import numpy as np
 from meta import teacher_backward, teacher_backward_ms
 from tqdm import tqdm
 
@@ -11,7 +9,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 class Trainer:
 
-    def __init__(self, rank, args, main_net, meta_net, enhancer, gold_loader, silver_loader, valid_loader, test_loader, num_classes, logger, exp_id=None):
+    def __init__(self, rank, args, main_net, meta_net,
+                enhancer, gold_loader, silver_loader,
+                valid_loader, test_loader, num_classes,
+                logger, injection_mode, mix_g, exp_id=None):
         self.rank = rank
         self.args = args
         self.main_net = main_net
@@ -23,14 +24,12 @@ class Trainer:
         self.test_loader = test_loader
         self.num_classes = num_classes
         self.logger = logger
+        self.injection_mode = injection_mode
+        self.mix_g = mix_g
         self.exp_id = exp_id
 
         if rank == 0:
             self.writer = SummaryWriter(args.logdir + '/' + exp_id)
-
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        torch.cuda.manual_seed(args.seed)
 
         self._setup_training()
 
@@ -43,13 +42,10 @@ class Trainer:
         enhancer_params = self.enhancer.parameters()
 
         self.main_opt = torch.optim.SGD(main_params, lr=args.main_lr, weight_decay=args.wdecay, momentum=args.momentum)
-        
-        self.meta_opt = torch.optim.SGD(meta_params, lr=args.meta_lr,
-                                    weight_decay=args.wdecay)
-        self.enhancer_opt = torch.optim.SGD(enhancer_params, lr=args.meta_lr,
-                                    weight_decay=args.wdecay)
+        self.meta_opt = torch.optim.SGD(meta_params, lr=args.meta_lr)
+        self.enhancer_opt = torch.optim.SGD(enhancer_params, lr=args.meta_lr)
 
-        milestones = args.sched_milestones
+        milestones = [int(m) for m in args.sched_milestones.split(',')]
         gamma = args.sched_gamma
         self.main_schdlr = torch.optim.lr_scheduler.MultiStepLR(self.main_opt, milestones=milestones, gamma=gamma)
         self.meta_schdlr = torch.optim.lr_scheduler.MultiStepLR(self.meta_opt, milestones=milestones, gamma=gamma)
@@ -68,37 +64,39 @@ class Trainer:
                 'enhancer': self.enhancer, 'enhancer_opt': self.enhancer_opt,
                 'data_s': data_s, 'target_s': target_s,
                 'data_g': data_g, 'target_g': target_g,
-                'eta': eta, 'num_classes': self.num_classes}
+                'eta': eta, 'num_classes': self.num_classes,
+                'injection_mode' : self.injection_mode, 'mix_g' : self.mix_g}
         teacher_backward_fn = teacher_backward if self.args.gradient_steps == 1 else teacher_backward_ms
         loss_g, loss_s, t_loss = teacher_backward_fn(**kwargs)
 
         # Update metrics
-        if self.args.steps % self.args.every == 0:
-            for metric, name in zip([loss_g, loss_s, t_loss], ['loss_g', 'loss_s', 't_loss']):
-                dist.reduce(metric, dst=0)
-                metric /= self.args.n_gpus
-                if self.rank == 0:
-                    self.writer.add_scalar(f'train/{name}', metric.item(), self.args.steps)
-
+        for metric, name in zip([loss_g, loss_s, t_loss], ['loss_g', 'loss_s', 't_loss']):
+            dist.reduce(metric, dst=0)
+            metric /= self.args.n_gpus
             if self.rank == 0:
-                main_lr = self.main_schdlr.get_last_lr()[0]
-                self.writer.add_scalar('train/main_lr', main_lr, self.args.steps)
-                self.writer.add_scalar('train/gradient_steps', self.args.gradient_steps, self.args.steps)
+                self.writer.add_scalar(f'train/{name}', metric.item(), self.args.steps)
+
+        if self.rank == 0:
+            main_lr = self.main_schdlr.get_last_lr()[0]
+            self.writer.add_scalar('train/main_lr', main_lr, self.args.steps)
+            self.writer.add_scalar('train/gradient_steps', self.args.gradient_steps, self.args.steps)
 
     def train(self):
         ''' Training loop '''
-        self.meta_net.train()
-        self.main_net.train()
-
         if self.rank == 0:
             self.best_val_main = 0
         self.epoch = 0
 
+        self.args.steps = 0
+        all_data_s, all_target_s = [], []
+        
         for epoch in range(self.args.epochs):
             self.logger.info('Epoch %d:' % epoch)
-            self.args.steps = 0
-            all_data_s, all_target_s = [], []
+            self.meta_net.train()
+            self.main_net.train()
+            
             self.epoch += 1
+            batch_idx = 0
 
             if self.rank == 0:
                 self.pbar = tqdm(total=len(self.silver_loader.dataset))
@@ -107,6 +105,7 @@ class Trainer:
                 
                 # Setup training iteration 
                 self.args.steps += 1
+                batch_idx += 1
                 if type(data_s) is list and len(data_s) == 1:
                     data_s = data_s[0]
                 *data_g, target_g = next(self.gold_loader)
@@ -115,7 +114,7 @@ class Trainer:
                     all_target_s.append(target_s)
                 
                 # Actual training step
-                if self.args.steps % self.args.gradient_steps == 0:
+                if batch_idx % self.args.gradient_steps == 0:
                     if self.args.gradient_steps == 1:
                         self._training_iter(data_s, target_s, data_g, target_g)
                     else:
@@ -147,10 +146,10 @@ class Trainer:
         test_acc_meta = evaluate(self.rank, self.meta_net, self.test_loader)
 
         self.logger.info('Val acc: %.4f\tTest acc: %.4f' % (val_acc_main, test_acc_main))
-        self.writer.add_scalar('train/val_acc_main', val_acc_main, self.epoch)
-        self.writer.add_scalar('train/test_acc_main', test_acc_meta, self.epoch)
-        self.writer.add_scalar('train/val_acc_meta', val_acc_meta, self.epoch)
-        self.writer.add_scalar('test/test_acc_main', test_acc_main, self.epoch)
+        self.writer.add_scalar('validation/main', val_acc_main, self.epoch)
+        self.writer.add_scalar('test/meta', test_acc_meta, self.epoch)
+        self.writer.add_scalar('validation/meta', val_acc_meta, self.epoch)
+        self.writer.add_scalar('test/main', test_acc_main, self.epoch)
             
         if val_acc_main > self.best_val_main:
             self.best_val_main = val_acc_main
@@ -165,8 +164,7 @@ class Trainer:
                 'main_net': self.best_main_params,
                 'meta_net': self.best_meta_params,
             }, 'models/%s_best.pth' % self.exp_id)
-                
-        self.writer.add_scalar('train/val_acc_best', self.best_val_main, self.epoch)
+
     
     def final_eval(self):
         ''' Compute final test score '''

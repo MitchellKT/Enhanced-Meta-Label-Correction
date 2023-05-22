@@ -5,7 +5,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 from resnet import PreResNet18, ResNet50, ResNet34
 
 def generalized_resnet50(num_classes, args, ssl=False):
-    model = ResNet50()
+    model = ResNet50(num_classes)
     if ssl == True:
         sd = torch.load(args.ssl_path)['model']
         sd = {k.removeprefix('encoder.module.') : v for k,v in sd.items()}

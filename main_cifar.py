@@ -1,6 +1,8 @@
 import pickle
 import argparse
 import os
+import random
+import numpy as np
 
 import torch.multiprocessing as mp
 from torch.distributed import destroy_process_group
@@ -28,7 +30,7 @@ parser.add_argument('--epochs', '-e', type=int, default=15, help='Number of epoc
 parser.add_argument('--every', default=10, type=int, help='Eval interval')
 parser.add_argument('--bs', default=128, type=int, help='batch size')
 parser.add_argument('--test_bs', default=100, type=int, help='batch size')
-parser.add_argument('--gold_bs', type=int, default=32)
+parser.add_argument('--gold_bs', type=int, default=128)
 parser.add_argument('--embedding_dim', type=int, default=512, help='Feature extractor output dim')
 parser.add_argument('--label_embedding_dim', type=int, default=128, help='Label embedding dim')
 parser.add_argument('--mlp_hidden_dim', type=int, default=128, help='MLP hidden layer units')
@@ -41,8 +43,8 @@ parser.add_argument('--sched_milestones', default='20', type=str, help='Mileston
 parser.add_argument('--sched_gamma', default=0.1, type=float, help='Multiply LR by gamma upon reaching a scheduled milestone')
 
 # Noise injection
-parser.add_argument('--corruption_type', type=str, choices=['unif', 'flip'])
-parser.add_argument('--corruption_level', type=float, help='Corruption level')
+parser.add_argument('--corruption_type', default='unif', type=str, choices=['unif', 'flip'])
+parser.add_argument('--corruption_level', default=0.5, type=float, help='Corruption level')
 parser.add_argument('--gold_fraction', default='0.02', type=float, help='Gold fraction')
 
 # Hardware
@@ -54,7 +56,7 @@ args = parser.parse_args()
 
 # //////////////// set logging and model outputs /////////////////
 def set_logging(rank):
-    filename = '_'.join([args.dataset, str(args.corruption_level), args.corruption_type, args.runid, str(args.epochs), str(args.seed), str(args.data_seed)])
+    filename = '_'.join([args.dataset, str(args.corruption_level), args.corruption_type, str(args.runid), str(args.epochs), str(args.seed), str(args.data_seed)])
     if not os.path.isdir('logs'):
         os.mkdir('logs')
     logfile = 'logs/' + filename + '.log'
@@ -91,9 +93,13 @@ def build_models(rank, dataset, num_classes):
 
 # //////////////////////// run experiments ////////////////////////
 def run(rank):
-    ddp_setup(rank, world_size=args.n_gpus, min_rank=args.gpuid)
+    ddp_setup(rank, world_size=args.n_gpus, runid=args.runid)
     logger = set_logging(rank)
-    filename = '_'.join([args.dataset, args.corruption_type, args.runid, str(args.epochs), str(args.seed), str(args.data_seed)])
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    filename = '_'.join([args.dataset, args.corruption_type, str(args.runid), str(args.epochs), str(args.seed), str(args.data_seed)])
     exp_id = filename
 
     results = {}
@@ -104,7 +110,9 @@ def run(rank):
     gold_loader, silver_loader, valid_loader, test_loader, num_classes = prepare_data(args.gold_fraction, args.corruption_level, args)
     main_net, meta_net, enhacner = build_models(rank, args.dataset, num_classes)
 
-    trainer = Trainer(rank, args, main_net, meta_net, enhacner, gold_loader, silver_loader, valid_loader, test_loader, num_classes, logger, exp_id)
+    trainer = Trainer(rank, args, main_net, meta_net, enhacner,
+                    gold_loader, silver_loader, valid_loader, test_loader,
+                    num_classes, logger, 'none', False, exp_id)
     trainer.train()
     test_acc = trainer.final_eval()
     

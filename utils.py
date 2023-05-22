@@ -28,14 +28,17 @@ def get_logger(filename, local_rank):
     
     return logger
 
-def ddp_setup(rank: int, world_size: int, min_rank: int):
+def ddp_setup(rank: int, world_size: int, runid=None):
     """
     Args:
         rank: Unique identifier of each process
         world_size: Total number of processes
     """
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "1235" + str(min_rank)
+    if runid:
+        os.environ["MASTER_PORT"] = "1235" + str(runid)
+    else:
+        os.environ["MASTER_PORT"] = "1235"
     torch.backends.cudnn.benchmark = True
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
