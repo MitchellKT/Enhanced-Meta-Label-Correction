@@ -36,7 +36,7 @@ Clothing1M:
 |:--- |:---:|
 |MLC|75.78|
 |Previous SOTA| 77.83 |
-|EMLC|**78.70** |
+|EMLC|**79.35** |
 
   
 ## Running The Code :runner:
