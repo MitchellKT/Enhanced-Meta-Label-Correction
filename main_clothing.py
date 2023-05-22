@@ -22,7 +22,7 @@ parser.add_argument('--data_path', default='data/', type=str, help='Root for the
 parser.add_argument('--logdir', type=str, default='runs', help='Log folder.')
 
 # Training
-parser.add_argument('--epochs', '-e', type=int, default=15, help='Number of epochs to train.')
+parser.add_argument('--epochs', '-e', type=int, default=3, help='Number of epochs to train.')
 parser.add_argument('--every', default=10, type=int, help='Eval interval')
 parser.add_argument('--bs', default=1024, type=int, help='batch size')
 parser.add_argument('--test_bs', default=100, type=int, help='batch size')
@@ -35,7 +35,7 @@ parser.add_argument('--main_lr', default=1e-1, type=float, help='lr for main net
 parser.add_argument('--meta_lr', default=1e-1, type=float, help='lr for meta net')
 parser.add_argument('--wdecay', default=5e-4, type=float, help='weight decay')
 parser.add_argument('--gradient_steps', default=1, type=int, help='Number of look-ahead gradient steps for meta-gradient')
-parser.add_argument('--sched_milestones', default='1,5', type=str, help='Milestones in which LR is decreased')
+parser.add_argument('--sched_milestones', default='1', type=str, help='Milestones in which LR is decreased')
 parser.add_argument('--sched_gamma', default=0.1, type=float, help='Multiply LR by gamma upon reaching a scheduled milestone')
 
 # Hardware
